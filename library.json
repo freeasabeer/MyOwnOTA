@@ -1,0 +1,17 @@
+{
+  "name": "MyOwnOTA",
+  "keywords": "esp8266, esp32, ota software update",
+  "description": "My own ESP8266 / ESP32 ota software update library",
+  "authors":
+  {
+    "name": "Olivier Perron"
+  },
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/freeasabeer/MyOwnOTA.git"
+  },
+  "version": "0.1.0",
+  "frameworks": "arduino",
+  "platforms": ["espressif8266", "espressif32"]
+}
