@@ -1,7 +1,12 @@
-#include <WebServer.h>
-#include <ESPmDNS.h>
-#include <Update.h>
-#include <ArduinoOTA.h>
+#ifndef DISABLE_WEB_OTA
+  #include <WebServer.h>
+  #include <ESPmDNS.h>
+  #include <Update.h>
+#endif
+#ifndef DISABLE_ARDUINO_OTA
+  #include <ArduinoOTA.h>
+  #include <SPIFFS.h>
+#endif
 #include "ota.h"
 
 static OTA_Config_t *s_otaconfig = NULL;
@@ -91,7 +96,7 @@ void OTA_WiFi_Client_setup() {
 ///////////////////////////////////////////////////////////////////////
 // OTA Web Update Stuff
 ///////////////////////////////////////////////////////////////////////
-
+#ifndef DISABLE_WEB_OTA
 static const String updateIndex1 =
 "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
 "<p>";
@@ -225,11 +230,12 @@ void OTAWebUpdater_setup(void) {
   MDNS.addService("http", "tcp", 80);
   Serial.println("OTA update web server started.");
 }
+#endif
 
 ///////////////////////////////////////////////////////////////////////
 // OTA Arduino Update Stuff
 ///////////////////////////////////////////////////////////////////////
-
+#ifndef DISABLE_ARDUINO_OTA
 void ArduinoOTA_setup(void) {
   // Port defaults to 3232
   // ArduinoOTA.setPort(3232);
@@ -255,7 +261,7 @@ void ArduinoOTA_setup(void) {
           } else { // U_SPIFFS
               type = "filesystem";
               // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-              //SPIFFS.end();
+              SPIFFS.end();
           }
           Serial.println("Start updating " + type);
       })
@@ -280,7 +286,7 @@ void ArduinoOTA_setup(void) {
   ArduinoOTA.begin();
   Serial.println("OTA update Arduino server started.");
 }
-
+#endif
 
 ///////////////////////////////////////////////////////////////////////
 // Public functions
@@ -295,25 +301,35 @@ void OTA_setup(OTA_Config_t *otaconfig) {
       break;
     case OTA_WIFI_CLIENT:
       OTA_WiFi_Client_setup();
+      break;
   }
 
 
   switch(otaconfig->otatype) {
+#ifndef DISABLE_ARDUINO_OTA
     case OTA_ARDUINO:
       ArduinoOTA_setup();
       break;
+#endif
+#ifndef DISABLE_WEB_OTA
     case OTA_WEB:
       OTAWebUpdater_setup();
+      break;
+#endif
   }
 }
 
 void OTA_handle(void) {
   switch(s_otaconfig->otatype) {
+#ifndef DISABLE_ARDUINO_OTA
     case OTA_ARDUINO:
       ArduinoOTA.handle();
-    break;
+      break;
+#endif
+#ifndef DISABLE_WEB_OTA
     case OTA_WEB:
       OTA_server.handleClient();
       break;
+#endif
   }
 }
