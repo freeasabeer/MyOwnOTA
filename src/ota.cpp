@@ -94,6 +94,21 @@ void OTA_WiFi_Client_setup() {
 }
 
 ///////////////////////////////////////////////////////////////////////
+// WiFi Client & AP Stuff
+///////////////////////////////////////////////////////////////////////
+
+void OTA_Wifi_disconnect() {
+  switch(s_otaconfig->otawifitype) {
+    case OTA_WIFI_AP:
+      WiFi.softAPdisconnect();
+      break;
+    case OTA_WIFI_CLIENT:
+      WiFi.disconnect();
+      break;
+  }
+}
+
+///////////////////////////////////////////////////////////////////////
 // OTA Web Update Stuff
 ///////////////////////////////////////////////////////////////////////
 #ifndef DISABLE_WEB_OTA
@@ -195,6 +210,7 @@ void OTAWebUpdater_setup(void) {
   OTA_server.on("/upload", HTTP_POST, []() {
   OTA_server.sendHeader("Connection", "close");
   OTA_server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+  delay(3000);
   ESP.restart();
   }, []() {
   HTTPUpload& upload = OTA_server.upload();
@@ -217,6 +233,9 @@ void OTAWebUpdater_setup(void) {
           debug("Rebooting...\n");
           //OTAWebUpdaterMessage = "Update Success: " + upload.totalSize;
           //OTAWebUpdaterMessage += " bytes\nRebooting...\n";
+          OTA_server.end();
+          OTA_Wifi_disconnect();
+          delay (100);
       } else {
           //Update.printError(Serial);
           debug(Update.errorString());
@@ -267,9 +286,9 @@ void ArduinoOTA_setup(void) {
       })
       .onEnd([]() {
           Serial.println("\nEnd");
-          #ifdef OTA_USE_WIFI_AP
-          WiFi.softAPdisconnect(true);
-          #endif
+          OTA_Wifi_disconnect();
+          delay (100);
+          ArduinoOTA.end();
       })
       .onProgress([](unsigned int progress, unsigned int total) {
           Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
@@ -295,7 +314,7 @@ void ArduinoOTA_setup(void) {
 void OTA_setup(OTA_Config_t *otaconfig) {
   s_otaconfig = otaconfig;
 
-  switch(otaconfig->otawifitype) {
+  switch(s_otaconfig->otawifitype) {
     case OTA_WIFI_AP:
       OTA_WiFi_AP_setup();
       break;
@@ -305,7 +324,7 @@ void OTA_setup(OTA_Config_t *otaconfig) {
   }
 
 
-  switch(otaconfig->otatype) {
+  switch(s_otaconfig->otatype) {
 #ifndef DISABLE_ARDUINO_OTA
     case OTA_ARDUINO:
       ArduinoOTA_setup();
