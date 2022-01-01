@@ -13,4 +13,4 @@ build_flags =
 in your platformio.ini file.
 
 I have no idea how to achieve this with the Arduino IDE...Please, make yourself a favor and use a decent development environment.
-Alternatively those still using the Arduino IDE could the required #define at the very first line of ota.cpp.
+Alternatively those still using the Arduino IDE could add the required #define at the very first line of ota.cpp.
