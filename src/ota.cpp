@@ -233,7 +233,7 @@ void OTAWebUpdater_setup(void) {
           debug("Rebooting...\n");
           //OTAWebUpdaterMessage = "Update Success: " + upload.totalSize;
           //OTAWebUpdaterMessage += " bytes\nRebooting...\n";
-          OTA_server.end();
+          OTA_server.close();
           OTA_Wifi_disconnect();
           delay (100);
       } else {
