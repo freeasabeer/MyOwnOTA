@@ -14,10 +14,12 @@
     OTA_WiFi_t otawifitype;
     const char *ssid;
     const char *key;
+    const char *ap_ip;
     const char *device_hostname;
     const char* otapassword;
     const char* appname;
     const char *appversion;
+    void (*cb)(const char* param);
   } OTA_Config_t;
   void OTA_setup(OTA_Config_t *otaconfig);
   void OTA_handle(void);

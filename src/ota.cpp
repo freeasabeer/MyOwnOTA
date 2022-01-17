@@ -26,6 +26,8 @@ void OTA_WiFi_AP_Event(WiFiEvent_t event) {
       debug("IP address: %s\n", WiFi.softAPIP().toString().c_str());
       debug("Network ID: %s\n", WiFi.softAPNetworkID().toString().c_str());
       debug("Broadcast IP: %s\n", WiFi.softAPBroadcastIP().toString().c_str());
+      if (s_otaconfig->cb !=NULL)
+        (*s_otaconfig->cb)(WiFi.softAPIP().toString().c_str());
       break;
   case SYSTEM_EVENT_AP_STOP:
       debug("WiFi AP stopped\n");
@@ -46,10 +48,15 @@ void OTA_WiFi_AP_Event(WiFiEvent_t event) {
   }
 }
 void OTA_WiFi_AP_setup(void) {
+  IPAddress ap_ip;
   debug("Starting OTA Wi-Fi AP...\n");
 
   WiFi.onEvent(OTA_WiFi_AP_Event);
-  WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
+  if (s_otaconfig->ap_ip != NULL)
+    ap_ip.fromString(s_otaconfig->ap_ip);
+  else
+    ap_ip.fromString(s_otaconfig->ap_ip);
+  WiFi.softAPConfig(ap_ip, ap_ip, IPAddress(255,255,255,0));	  
   WiFi.softAPsetHostname(s_otaconfig->device_hostname);
   WiFi.softAP(s_otaconfig->device_hostname);
   debug("IP address: %s\n", WiFi.softAPIP().toString().c_str());
@@ -73,6 +80,8 @@ void OTA_WiFi_Client_Event(WiFiEvent_t event) {
   case SYSTEM_EVENT_STA_GOT_IP:
       debug("WiFi connected\n");
       debug("IP address: %s\n", WiFi.localIP().toString().c_str());
+	  if (s_otaconfig->cb !=NULL)
+        (*s_otaconfig->cb)(WiFi.localIP().toString().c_str());
       break;
   case SYSTEM_EVENT_STA_DISCONNECTED:
       debug("WiFi lost connection\n");
