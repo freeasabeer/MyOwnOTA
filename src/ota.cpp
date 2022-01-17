@@ -21,7 +21,7 @@ static OTA_Config_t *s_otaconfig = NULL;
 void OTA_WiFi_AP_Event(WiFiEvent_t event) {
   debug("[WiFi-event] event: %d\n", event);
   switch(event) {
-  case SYSTEM_EVENT_AP_START:
+    case SYSTEM_EVENT_AP_START:
       debug("WiFi AP started\n");
       debug("IP address: %s\n", WiFi.softAPIP().toString().c_str());
       debug("Network ID: %s\n", WiFi.softAPNetworkID().toString().c_str());
@@ -29,21 +29,21 @@ void OTA_WiFi_AP_Event(WiFiEvent_t event) {
       if (s_otaconfig->cb !=NULL)
         (*s_otaconfig->cb)(WiFi.softAPIP().toString().c_str());
       break;
-  case SYSTEM_EVENT_AP_STOP:
+    case SYSTEM_EVENT_AP_STOP:
       debug("WiFi AP stopped\n");
       break;
-  case SYSTEM_EVENT_AP_STACONNECTED:
+    case SYSTEM_EVENT_AP_STACONNECTED:
       debug("a station connected to ESP32 soft-AP\n");
       debug("%d client(s) connected.\n", WiFi.softAPgetStationNum());
       break;
-  case SYSTEM_EVENT_AP_STADISCONNECTED:
+    case SYSTEM_EVENT_AP_STADISCONNECTED:
       debug("a station disconnected from ESP32 soft-AP\n");
       debug("%d client(s) connected.\n", WiFi.softAPgetStationNum());
       break;
-  case SYSTEM_EVENT_AP_STAIPASSIGNED:
+    case SYSTEM_EVENT_AP_STAIPASSIGNED:
       debug("ESP32 soft-AP assign an IP to a connected station\n");
       break;
-  default:
+    default:
       break;
   }
 }
@@ -55,8 +55,8 @@ void OTA_WiFi_AP_setup(void) {
   if (s_otaconfig->ap_ip != NULL)
     ap_ip.fromString(s_otaconfig->ap_ip);
   else
-    ap_ip.fromString(s_otaconfig->ap_ip);
-  WiFi.softAPConfig(ap_ip, ap_ip, IPAddress(255,255,255,0));	  
+    ap_ip.fromString("192.168.4.1");
+  WiFi.softAPConfig(ap_ip, ap_ip, IPAddress(255,255,255,0));
   WiFi.softAPsetHostname(s_otaconfig->device_hostname);
   WiFi.softAP(s_otaconfig->device_hostname);
   debug("IP address: %s\n", WiFi.softAPIP().toString().c_str());
@@ -77,17 +77,17 @@ void OTA_connectToWifi(TimerHandle_t xTimer) {
 void OTA_WiFi_Client_Event(WiFiEvent_t event) {
   debug("[WiFi-event] event: %d\n", event);
   switch(event) {
-  case SYSTEM_EVENT_STA_GOT_IP:
+    case SYSTEM_EVENT_STA_GOT_IP:
       debug("WiFi connected\n");
       debug("IP address: %s\n", WiFi.localIP().toString().c_str());
-	  if (s_otaconfig->cb !=NULL)
+      if (s_otaconfig->cb !=NULL)
         (*s_otaconfig->cb)(WiFi.localIP().toString().c_str());
       break;
-  case SYSTEM_EVENT_STA_DISCONNECTED:
+    case SYSTEM_EVENT_STA_DISCONNECTED:
       debug("WiFi lost connection\n");
       xTimerStart(OTAwifiReconnectTimer, 0);
       break;
-  default:
+    default:
       break;
   }
 }
@@ -98,7 +98,7 @@ void OTA_WiFi_Client_setup() {
   OTA_connectToWifi(NULL);
 
   while(WiFi.status() != WL_CONNECTED) {
-      delay(1000);
+    delay(1000);
   }
 }
 
