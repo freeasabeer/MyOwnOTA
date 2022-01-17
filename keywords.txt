@@ -10,8 +10,8 @@ OTA_t		 KEYWORD1
 # Methods and Functions (KEYWORD2)
 #######################################
 
-OTA_setup		KEYWORD2
-OTA_handle		KEYWORD2
+setup		KEYWORD2
+Ohandle		KEYWORD2
 
 #######################################
 # Constants (LITERAL1)

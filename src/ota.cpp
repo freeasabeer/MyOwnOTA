@@ -9,11 +9,9 @@
 #endif
 #include "ota.h"
 
-//static MyOwnOTA *instance;
 static void StaticTimerCallbackFunction(TimerHandle_t xTimer) {
-  //instance->OTA_connectToWifi(xTimer);
-  	MyOwnOTA* me = static_cast<MyOwnOTA*>(pvTimerGetTimerID(xTimer));
-		me->OTA_connectToWifi(xTimer);
+  MyOwnOTA* me = static_cast<MyOwnOTA*>(pvTimerGetTimerID(xTimer));
+  me->OTA_connectToWifi(xTimer);
 }
 
 MyOwnOTA::MyOwnOTA() {
@@ -21,7 +19,6 @@ MyOwnOTA::MyOwnOTA() {
   WebServer OTA_server(80);
   _OTA_server = &OTA_server;
 #endif
-  //instance = this;
 }
 
 // Private functions
@@ -67,8 +64,8 @@ void MyOwnOTA::OTA_WiFi_AP_setup(void) {
   if (_otaconfig->ap_ip != NULL)
     ap_ip.fromString(_otaconfig->ap_ip);
   else
-    ap_ip.fromString(_otaconfig->ap_ip);
-  WiFi.softAPConfig(ap_ip, ap_ip, IPAddress(255,255,255,0));	  
+    ap_ip.fromString("192.168.4.1");
+  WiFi.softAPConfig(ap_ip, ap_ip, IPAddress(255,255,255,0));
   WiFi.softAPsetHostname(_otaconfig->device_hostname);
   WiFi.softAP(_otaconfig->device_hostname);
   debug("IP address: %s\n", WiFi.softAPIP().toString().c_str());
@@ -81,33 +78,32 @@ void MyOwnOTA::OTA_WiFi_AP_setup(void) {
 
 void MyOwnOTA::OTA_connectToWifi(TimerHandle_t xTimer) {
   debug("Connecting to Wi-Fi...\n");
-  WiFi.begin(_otaconfig->ssid, _otaconfig->key);
+  //WiFi.begin(_otaconfig->ssid, _otaconfig->key);
+  Serial.println("Timer is OK !");
 }
 
 
 void MyOwnOTA::OTA_WiFi_Client_Event(WiFiEvent_t event) {
   debug("[WiFi-event] event: %d\n", event);
   switch(event) {
-  case SYSTEM_EVENT_STA_GOT_IP:
+    case SYSTEM_EVENT_STA_GOT_IP:
       debug("WiFi connected\n");
       debug("IP address: %s\n", WiFi.localIP().toString().c_str());
-	  if (_otaconfig->cb !=NULL)
+      if (_otaconfig->cb !=NULL)
         (*_otaconfig->cb)(WiFi.localIP().toString().c_str());
       break;
-  case SYSTEM_EVENT_STA_DISCONNECTED:
+    case SYSTEM_EVENT_STA_DISCONNECTED:
       debug("WiFi lost connection\n");
       xTimerStart(_OTAwifiReconnectTimer, 0);
       break;
-  default:
+    default:
       break;
   }
 }
 
 
 void MyOwnOTA::OTA_WiFi_Client_setup() {
-  //THIS ONE WORKS OK//_OTAwifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(2000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(StaticTimerCallbackFunction));
   _OTAwifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(2000), pdFALSE, this, reinterpret_cast<TimerCallbackFunction_t>(StaticTimerCallbackFunction));
-
   WiFi.onEvent(std::bind(&MyOwnOTA::OTA_WiFi_Client_Event, this, std::placeholders::_1));
   OTA_connectToWifi(NULL);
 
@@ -190,8 +186,8 @@ static const String updateIndex2 =
   static String authFailResponse = "Authentication Failed";
 
 void MyOwnOTA::handle_favicon(void) {
-      _OTA_server->sendHeader("Connection", "close");
-      _OTA_server->send(200, "text/html", "<link rel=\"icon\" href=\"data:;base64,iVBORw0KGgo=\">");
+  _OTA_server->sendHeader("Connection", "close");
+  _OTA_server->send(200, "text/html", "<link rel=\"icon\" href=\"data:;base64,iVBORw0KGgo=\">");
 }
 
 void MyOwnOTA::handle_notfound(void) {
@@ -203,7 +199,7 @@ void MyOwnOTA::handle_notfound(void) {
       message += "\nArguments: ";
       message +=  _OTA_server->args();
       message += "\n";
-       _OTA_server->send(200, "text/plain", message);
+      _OTA_server->send(200, "text/plain", message);
 }
 
 void MyOwnOTA::handle_update(void) {
@@ -216,7 +212,7 @@ void MyOwnOTA::handle_update(void) {
     //return server.requestAuthentication(DIGEST_AUTH, www_realm);
     //Digest Auth Method with Custom realm and Failure Response
   {
-      return _OTA_server->requestAuthentication(DIGEST_AUTH, www_realm, authFailResponse);
+    return _OTA_server->requestAuthentication(DIGEST_AUTH, www_realm, authFailResponse);
   }
   _authenticated = true;
   _OTA_server->sendHeader("Connection", "close");

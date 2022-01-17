@@ -22,7 +22,7 @@
     const char *appversion;
     void (*cb)(const char* param);
   } OTA_Config_t;
-  
+
   class MyOwnOTA
   {
     public:
@@ -30,7 +30,7 @@
       void setup(OTA_Config_t *otaconfig);
       void handle(void);
       void OTA_connectToWifi(TimerHandle_t xTimer);
-    
+
     private:
       void OTA_WiFi_AP_Event(WiFiEvent_t event);
       void OTA_WiFi_AP_setup(void);
@@ -45,7 +45,6 @@
       void OTAWebUpdater_setup(void);
       void handle_arduinoota_end(void);
       void ArduinoOTA_setup(void);
-      TimerHandle_t TimerCreate(const char * const pcTimerName, const TickType_t xTimerPeriod, const UBaseType_t uxAutoReload, void * const pvTimerID, TimerCallbackFunction_t pxCallbackFunction);
 
       OTA_Config_t *_otaconfig = NULL;
       TimerHandle_t _OTAwifiReconnectTimer;
