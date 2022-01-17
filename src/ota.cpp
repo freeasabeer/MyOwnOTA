@@ -9,7 +9,20 @@
 #endif
 #include "ota.h"
 
-static OTA_Config_t *s_otaconfig = NULL;
+//static MyOwnOTA *instance;
+static void StaticTimerCallbackFunction(TimerHandle_t xTimer) {
+  //instance->OTA_connectToWifi(xTimer);
+  	MyOwnOTA* me = static_cast<MyOwnOTA*>(pvTimerGetTimerID(xTimer));
+		me->OTA_connectToWifi(xTimer);
+}
+
+MyOwnOTA::MyOwnOTA() {
+#ifndef DISABLE_WEB_OTA
+  WebServer OTA_server(80);
+  _OTA_server = &OTA_server;
+#endif
+  //instance = this;
+}
 
 // Private functions
 #define debug Serial.printf
@@ -18,7 +31,7 @@ static OTA_Config_t *s_otaconfig = NULL;
 // WiFi AP Stuff
 ///////////////////////////////////////////////////////////////////////
 
-void OTA_WiFi_AP_Event(WiFiEvent_t event) {
+void MyOwnOTA::OTA_WiFi_AP_Event(WiFiEvent_t event) {
   debug("[WiFi-event] event: %d\n", event);
   switch(event) {
   case SYSTEM_EVENT_AP_START:
@@ -26,6 +39,8 @@ void OTA_WiFi_AP_Event(WiFiEvent_t event) {
       debug("IP address: %s\n", WiFi.softAPIP().toString().c_str());
       debug("Network ID: %s\n", WiFi.softAPNetworkID().toString().c_str());
       debug("Broadcast IP: %s\n", WiFi.softAPBroadcastIP().toString().c_str());
+      if (_otaconfig->cb !=NULL)
+        (*_otaconfig->cb)(WiFi.softAPIP().toString().c_str());
       break;
   case SYSTEM_EVENT_AP_STOP:
       debug("WiFi AP stopped\n");
@@ -45,13 +60,17 @@ void OTA_WiFi_AP_Event(WiFiEvent_t event) {
       break;
   }
 }
-void OTA_WiFi_AP_setup(void) {
+void MyOwnOTA::OTA_WiFi_AP_setup(void) {
+  IPAddress ap_ip;
   debug("Starting OTA Wi-Fi AP...\n");
-
-  WiFi.onEvent(OTA_WiFi_AP_Event);
-  WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
-  WiFi.softAPsetHostname(s_otaconfig->device_hostname);
-  WiFi.softAP(s_otaconfig->device_hostname);
+  WiFi.onEvent(std::bind(&MyOwnOTA::OTA_WiFi_AP_Event, this, std::placeholders::_1));
+  if (_otaconfig->ap_ip != NULL)
+    ap_ip.fromString(_otaconfig->ap_ip);
+  else
+    ap_ip.fromString(_otaconfig->ap_ip);
+  WiFi.softAPConfig(ap_ip, ap_ip, IPAddress(255,255,255,0));	  
+  WiFi.softAPsetHostname(_otaconfig->device_hostname);
+  WiFi.softAP(_otaconfig->device_hostname);
   debug("IP address: %s\n", WiFi.softAPIP().toString().c_str());
 }
 
@@ -59,33 +78,37 @@ void OTA_WiFi_AP_setup(void) {
 // WiFi Client Stuff
 ///////////////////////////////////////////////////////////////////////
 
-static TimerHandle_t OTAwifiReconnectTimer;
 
-void OTA_connectToWifi(TimerHandle_t xTimer) {
+void MyOwnOTA::OTA_connectToWifi(TimerHandle_t xTimer) {
   debug("Connecting to Wi-Fi...\n");
-  WiFi.begin(s_otaconfig->ssid, s_otaconfig->key);
+  WiFi.begin(_otaconfig->ssid, _otaconfig->key);
 }
 
 
-void OTA_WiFi_Client_Event(WiFiEvent_t event) {
+void MyOwnOTA::OTA_WiFi_Client_Event(WiFiEvent_t event) {
   debug("[WiFi-event] event: %d\n", event);
   switch(event) {
   case SYSTEM_EVENT_STA_GOT_IP:
       debug("WiFi connected\n");
       debug("IP address: %s\n", WiFi.localIP().toString().c_str());
+	  if (_otaconfig->cb !=NULL)
+        (*_otaconfig->cb)(WiFi.localIP().toString().c_str());
       break;
   case SYSTEM_EVENT_STA_DISCONNECTED:
       debug("WiFi lost connection\n");
-      xTimerStart(OTAwifiReconnectTimer, 0);
+      xTimerStart(_OTAwifiReconnectTimer, 0);
       break;
   default:
       break;
   }
 }
 
-void OTA_WiFi_Client_setup() {
-  OTAwifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(2000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(OTA_connectToWifi));
-  WiFi.onEvent(OTA_WiFi_Client_Event);
+
+void MyOwnOTA::OTA_WiFi_Client_setup() {
+  //THIS ONE WORKS OK//_OTAwifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(2000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(StaticTimerCallbackFunction));
+  _OTAwifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(2000), pdFALSE, this, reinterpret_cast<TimerCallbackFunction_t>(StaticTimerCallbackFunction));
+
+  WiFi.onEvent(std::bind(&MyOwnOTA::OTA_WiFi_Client_Event, this, std::placeholders::_1));
   OTA_connectToWifi(NULL);
 
   while(WiFi.status() != WL_CONNECTED) {
@@ -97,8 +120,8 @@ void OTA_WiFi_Client_setup() {
 // WiFi Client & AP Stuff
 ///////////////////////////////////////////////////////////////////////
 
-void OTA_Wifi_disconnect() {
-  switch(s_otaconfig->otawifitype) {
+void MyOwnOTA::OTA_Wifi_disconnect() {
+  switch(_otaconfig->otawifitype) {
     case OTA_WIFI_AP:
       WiFi.softAPdisconnect();
       break;
@@ -161,36 +184,30 @@ static const String updateIndex2 =
   "});"
 "</script>";
 
-// allows you to set the realm of authentication Default:"Login Required"
-static const char* www_realm = "ESP32 OTA Update";
-// the Content of the HTML response in case of Unautherized Access Default:empty
-static String authFailResponse = "Authentication Failed";
-static boolean authenticated = false;
+  // allows you to set the realm of authentication Default:"Login Required"
+  static const char* www_realm = "ESP32 OTA Update";
+  // the Content of the HTML response in case of Unautherized Access Default:empty
+  static String authFailResponse = "Authentication Failed";
 
-static WebServer OTA_server(80);
+void MyOwnOTA::handle_favicon(void) {
+      _OTA_server->sendHeader("Connection", "close");
+      _OTA_server->send(200, "text/html", "<link rel=\"icon\" href=\"data:;base64,iVBORw0KGgo=\">");
+}
 
-
-
-void OTAWebUpdater_setup(void) {
-  OTA_server.on("/favicon.ico", HTTP_GET,[]() {
-      OTA_server.sendHeader("Connection", "close");
-      OTA_server.send(200, "text/html", "<link rel=\"icon\" href=\"data:;base64,iVBORw0KGgo=\">");
-      });
-
-  OTA_server.onNotFound([]() {
+void MyOwnOTA::handle_notfound(void) {
       String message = "Server is running!\n\n";
       message += "URI: ";
-      message += OTA_server.uri();
+      message +=  _OTA_server->uri();
       message += "\nMethod: ";
-      message += (OTA_server.method() == HTTP_GET) ? "GET" : "POST";
+      message += (_OTA_server->method() == HTTP_GET) ? "GET" : "POST";
       message += "\nArguments: ";
-      message += OTA_server.args();
+      message +=  _OTA_server->args();
       message += "\n";
-      OTA_server.send(200, "text/plain", message);
-      });
+       _OTA_server->send(200, "text/plain", message);
+}
 
-  OTA_server.on("/update", HTTP_GET, []() {
-  if (!OTA_server.authenticate("MyOwnOTA", s_otaconfig->otapassword))
+void MyOwnOTA::handle_update(void) {
+  if (!_OTA_server->authenticate("MyOwnOTA", _otaconfig->otapassword))
     //Basic Auth Method with Custom realm and Failure Response
     //return server.requestAuthentication(BASIC_AUTH, www_realm, authFailResponse);
     //Digest Auth Method with realm="Login Required" and empty Failure Response
@@ -199,21 +216,22 @@ void OTAWebUpdater_setup(void) {
     //return server.requestAuthentication(DIGEST_AUTH, www_realm);
     //Digest Auth Method with Custom realm and Failure Response
   {
-      return OTA_server.requestAuthentication(DIGEST_AUTH, www_realm, authFailResponse);
+      return _OTA_server->requestAuthentication(DIGEST_AUTH, www_realm, authFailResponse);
   }
-  authenticated = true;
-  OTA_server.sendHeader("Connection", "close");
-  OTA_server.send(200, "text/html", updateIndex1+s_otaconfig->appname+" "+s_otaconfig->appversion+updateIndex2);
-  });
+  _authenticated = true;
+  _OTA_server->sendHeader("Connection", "close");
+  _OTA_server->send(200, "text/html", updateIndex1+_otaconfig->appname+" "+_otaconfig->appversion+updateIndex2);  
+}
 
-  /*handling uploading firmware file */
-  OTA_server.on("/upload", HTTP_POST, []() {
-  OTA_server.sendHeader("Connection", "close");
-  OTA_server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+void MyOwnOTA::handle_upload_rqt(void) {
+  _OTA_server->sendHeader("Connection", "close");
+  _OTA_server->send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
   delay(3000);
   ESP.restart();
-  }, []() {
-  HTTPUpload& upload = OTA_server.upload();
+}
+
+void MyOwnOTA::handle_file_upload(void) {
+  HTTPUpload& upload = _OTA_server->upload();
   if (upload.status == UPLOAD_FILE_START) {
       debug("Update: %s\n", upload.filename.c_str());
       if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { //start with max available size
@@ -233,7 +251,7 @@ void OTAWebUpdater_setup(void) {
           debug("Rebooting...\n");
           //OTAWebUpdaterMessage = "Update Success: " + upload.totalSize;
           //OTAWebUpdaterMessage += " bytes\nRebooting...\n";
-          OTA_server.close();
+          _OTA_server->close();
           OTA_Wifi_disconnect();
           delay (100);
       } else {
@@ -242,10 +260,17 @@ void OTAWebUpdater_setup(void) {
           //OTAWebUpdaterMessage = Update.errorString();
       }
   }
-  });
+}
 
-  OTA_server.begin();
-  MDNS.begin(s_otaconfig->device_hostname);
+void MyOwnOTA::OTAWebUpdater_setup(void) {
+  _OTA_server->on("/favicon.ico", HTTP_GET, std::bind(&MyOwnOTA::handle_favicon, this));
+  _OTA_server->onNotFound(std::bind(&MyOwnOTA::handle_notfound, this));
+  _OTA_server->on("/update", HTTP_GET, std::bind(&MyOwnOTA::handle_update, this));
+  /*handling uploading firmware file */
+  _OTA_server->on("/upload", HTTP_POST, std::bind(&MyOwnOTA::handle_upload_rqt, this), std::bind(&MyOwnOTA::handle_file_upload, this));
+
+  _OTA_server->begin();
+  MDNS.begin(_otaconfig->device_hostname);
   MDNS.addService("http", "tcp", 80);
   Serial.println("OTA update web server started.");
 }
@@ -255,13 +280,20 @@ void OTAWebUpdater_setup(void) {
 // OTA Arduino Update Stuff
 ///////////////////////////////////////////////////////////////////////
 #ifndef DISABLE_ARDUINO_OTA
-void ArduinoOTA_setup(void) {
+void MyOwnOTA::handle_arduinoota_end(void) {
+  Serial.println("\nEnd");
+  OTA_Wifi_disconnect();
+  delay (100);
+  ArduinoOTA.end();
+}
+
+void MyOwnOTA::ArduinoOTA_setup(void) {
   // Port defaults to 3232
   // ArduinoOTA.setPort(3232);
 
   ArduinoOTA.setMdnsEnabled(true);
   // Hostname defaults to esp3232-[MAC]
-  ArduinoOTA.setHostname(s_otaconfig->device_hostname);
+  ArduinoOTA.setHostname(_otaconfig->device_hostname);
   Serial.printf("Device hostname: %s.local\n", ArduinoOTA.getHostname().c_str());
 
   // No authentication by default
@@ -269,8 +301,8 @@ void ArduinoOTA_setup(void) {
   // Password can be set with it's md5 value as well
   // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
   //ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
-  if (s_otaconfig->otapassword != NULL)
-    ArduinoOTA.setPassword(s_otaconfig->otapassword);
+  if (_otaconfig->otapassword != NULL)
+    ArduinoOTA.setPassword(_otaconfig->otapassword);
 
   ArduinoOTA
       .onStart([]() {
@@ -284,12 +316,7 @@ void ArduinoOTA_setup(void) {
           }
           Serial.println("Start updating " + type);
       })
-      .onEnd([]() {
-          Serial.println("\nEnd");
-          OTA_Wifi_disconnect();
-          delay (100);
-          ArduinoOTA.end();
-      })
+      .onEnd(std::bind(&MyOwnOTA::handle_arduinoota_end, this))
       .onProgress([](unsigned int progress, unsigned int total) {
           Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
       })
@@ -311,10 +338,10 @@ void ArduinoOTA_setup(void) {
 // Public functions
 ///////////////////////////////////////////////////////////////////////
 
-void OTA_setup(OTA_Config_t *otaconfig) {
-  s_otaconfig = otaconfig;
+void MyOwnOTA::setup(OTA_Config_t *otaconfig) {
+  _otaconfig = otaconfig;
 
-  switch(s_otaconfig->otawifitype) {
+  switch(_otaconfig->otawifitype) {
     case OTA_WIFI_AP:
       OTA_WiFi_AP_setup();
       break;
@@ -324,7 +351,7 @@ void OTA_setup(OTA_Config_t *otaconfig) {
   }
 
 
-  switch(s_otaconfig->otatype) {
+  switch(_otaconfig->otatype) {
 #ifndef DISABLE_ARDUINO_OTA
     case OTA_ARDUINO:
       ArduinoOTA_setup();
@@ -338,8 +365,8 @@ void OTA_setup(OTA_Config_t *otaconfig) {
   }
 }
 
-void OTA_handle(void) {
-  switch(s_otaconfig->otatype) {
+void MyOwnOTA::handle(void) {
+  switch(_otaconfig->otatype) {
 #ifndef DISABLE_ARDUINO_OTA
     case OTA_ARDUINO:
       ArduinoOTA.handle();
@@ -347,7 +374,7 @@ void OTA_handle(void) {
 #endif
 #ifndef DISABLE_WEB_OTA
     case OTA_WEB:
-      OTA_server.handleClient();
+      _OTA_server->handleClient();
       break;
 #endif
   }
