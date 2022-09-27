@@ -216,7 +216,7 @@ void MyOwnOTA::handle_update(void) {
   }
   _authenticated = true;
   _OTA_server->sendHeader("Connection", "close");
-  _OTA_server->send(200, "text/html", updateIndex1+_otaconfig->appname+" "+_otaconfig->appversion+updateIndex2);  
+  _OTA_server->send(200, "text/html", updateIndex1+_otaconfig->appname+" "+_otaconfig->appversion+updateIndex2);
 }
 
 void MyOwnOTA::handle_upload_rqt(void) {
@@ -277,10 +277,10 @@ void MyOwnOTA::OTAWebUpdater_setup(void) {
 ///////////////////////////////////////////////////////////////////////
 #ifndef DISABLE_ARDUINO_OTA
 void MyOwnOTA::handle_arduinoota_end(void) {
-  Serial.println("\nEnd");
-  OTA_Wifi_disconnect();
-  delay (100);
   ArduinoOTA.end();
+  Serial.println("\nEnd");
+  delay (100);
+  OTA_Wifi_disconnect();
 }
 
 void MyOwnOTA::ArduinoOTA_setup(void) {
